@@ -1,0 +1,6 @@
+out/
+dist/
+*.zip
+*.obj
+*.lib
+*.exp
