@@ -1,0 +1,58 @@
+name: Build
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to attach files to a release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC (x64)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build dinput8 proxy version
+        shell: cmd
+        run: |
+          mkdir out\proxy
+          cl /nologo /LD /O2 /EHsc /MT dsr_fps_limit.cpp /Fo:out\proxy\ /Fe:out\proxy\dinput8.dll user32.lib d3d11.lib winmm.lib
+
+      - name: Build standalone version (NO_PROXY)
+        shell: cmd
+        run: |
+          mkdir out\standalone
+          cl /nologo /LD /O2 /EHsc /MT /DNO_PROXY dsr_fps_limit.cpp /Fo:out\standalone\ /Fe:out\standalone\dsr_fps_limit.dll user32.lib d3d11.lib winmm.lib
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/proxy, dist/standalone | Out-Null
+          Copy-Item out/proxy/dinput8.dll, dsr_fps_limit.ini, README.md dist/proxy/
+          Copy-Item out/standalone/dsr_fps_limit.dll, dsr_fps_limit.ini, README.md dist/standalone/
+          Compress-Archive -Path dist/proxy/*      -DestinationPath dsr_fps_limit_proxy.zip
+          Compress-Archive -Path dist/standalone/* -DestinationPath dsr_fps_limit_standalone.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dsr_fps_limit
+          path: |
+            dsr_fps_limit_proxy.zip
+            dsr_fps_limit_standalone.zip
+
+      - name: Publish release (on v* tags)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dsr_fps_limit_proxy.zip
+            dsr_fps_limit_standalone.zip
